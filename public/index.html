@@ -1,0 +1,239 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Case Studio | Checkout Demo</title>
+
+<style>
+  :root {
+    --brand-primary: #323416;
+    --brand-secondary: #8C9E6E;
+    --brand-background: #FFFFFD;
+  }
+
+  body {
+  font-family: Arial, sans-serif;
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 20px;
+  color: var(--brand-primary);
+  background: var(--brand-background);
+}
+
+    header {
+      margin-bottom: 32px;
+    }
+
+.brand-logo {
+  width: 125px;
+  height: auto;
+  object-fit: contain;
+}
+
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+    }
+
+    .product {
+      background: var(--brand-background);
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+    }
+
+    .product-icon {
+      font-size: 64px;
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    button, select {
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 6px;
+    }
+
+   button {
+  background: var(--brand-primary);
+  color: var(--brand-background);
+  border: none;
+  cursor: pointer;
+}
+
+    button:hover {
+  background: var(--brand-secondary);
+  opacity: 1;
+}
+
+    #message {
+      margin-top: 20px;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Case Studio</h1>
+    <img src="/brand-logo.png" alt="Brand logo" class="brand-logo">
+    <p>Find the right case for your phone.</p>
+  </header>
+
+  <section>
+    <label for="country">Delivery country:</label>
+    <select id="country">
+      <option value="HK">Hong Kong</option>
+      <option value="NL">Netherlands</option>
+    </select>
+  </section>
+
+  <h2>Our collection</h2>
+
+  <section class="products">
+    <article class="product">
+      <div class="product-icon" aria-hidden="true">📱</div>
+      <h3>Classic Clear Case</h3>
+      <p>Lightweight everyday protection.</p>
+      <p><strong>HKD 120 / EUR 15</strong></p>
+      <button type="button" onclick="addToCart('classic')">Choose case</button>
+    </article>
+
+    <article class="product">
+      <div class="product-icon" aria-hidden="true">🛡️</div>
+      <h3>Rugged Shield Case</h3>
+      <p>Extra protection for daily adventures.</p>
+      <p><strong>HKD 180 / EUR 22</strong></p>
+      <button type="button" onclick="addToCart('rugged')">Choose case</button>
+    </article>
+  </section>
+
+  <section class="product" style="margin-top: 24px;">
+    <h2>Your order</h2>
+    <p id="order">No case selected yet.</p>
+    <button type="button" id="payButton" disabled>Continue to payment</button>
+    <p id="message" role="status" aria-live="polite"></p>
+  </section>
+
+  <script>
+    const products = {
+      classic: { name: 'Classic Clear Case', hkd: 120, eur: 15 },
+      rugged: { name: 'Rugged Shield Case', hkd: 180, eur: 22 }
+    };
+
+    let selectedProduct = null;
+    let selectedProductId = null;
+
+  function addToCart(productId) {
+  selectedProductId = productId;
+  selectedProduct = products[productId];
+  updateOrder();
+}
+
+function updateOrder() {
+  const country = document.getElementById('country').value;
+  const currency = country === 'NL' ? 'EUR' : 'HKD';
+  const amount = currency === 'EUR'
+    ? selectedProduct.eur
+    : selectedProduct.hkd;
+
+      document.getElementById('order').textContent =
+        `${selectedProduct.name} — ${currency} ${amount}`;
+
+      document.getElementById('payButton').disabled = false;
+      document.getElementById('message').textContent =
+        'Order selected. Payment integration is the next step.';
+    }
+
+    document.getElementById('country').addEventListener('change', () => {
+      if (selectedProduct) updateOrder();
+    });
+  </script>
+
+<section id="payment-section" hidden>
+  <h2>Secure Checkout</h2>
+  <p id="payment-message">Preparing your secure payment...</p>
+  <div id="flow-container"></div>
+</section>
+
+<script src="https://checkout-web-components.checkout.com/index.js"></script>
+
+<script>
+  const payButton = document.getElementById('payButton');
+  const paymentSection = document.getElementById('payment-section');
+  const paymentMessage = document.getElementById('payment-message');
+  const flowContainer = document.getElementById('flow-container');
+
+  payButton.addEventListener('click', async () => {
+    if (!selectedProductId) {
+      paymentMessage.textContent = 'Please choose a product first.';
+      paymentSection.hidden = false;
+      return;
+    }
+
+    const country = document.getElementById('country').value;
+
+    payButton.disabled = true;
+    paymentSection.hidden = false;
+    paymentMessage.textContent = 'Preparing secure checkout...';
+    flowContainer.replaceChildren();
+
+    try {
+      const [configResponse, sessionResponse] = await Promise.all([
+        fetch('/api/config'),
+        fetch('/api/payment-sessions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            country,
+            productId: selectedProductId
+          })
+        })
+      ]);
+
+      if (!configResponse.ok) {
+        throw new Error('Could not load checkout configuration.');
+      }
+
+      if (!sessionResponse.ok) {
+        const error = await sessionResponse.json();
+        throw new Error(
+          error.details?.message ||
+          error.details?.error_type ||
+          error.error ||
+          'Could not create payment session.'
+        );
+      }
+
+      const config = await configResponse.json();
+      const paymentSession = await sessionResponse.json();
+
+      if (!config.checkoutPublicKey) {
+        throw new Error('Checkout public key is missing.');
+      }
+
+      const checkout = await CheckoutWebComponents({
+        paymentSession,
+        publicKey: config.checkoutPublicKey,
+        environment: 'sandbox'
+      });
+
+      const flow = checkout.create('flow');
+      flow.mount('#flow-container');
+
+      paymentMessage.textContent = 'Choose a payment method below.';
+    } catch (error) {
+      console.error('Checkout initialization failed:', error);
+      paymentMessage.textContent =
+        'Unable to load checkout. Please try again.';
+      payButton.disabled = false;
+    }
+  });
+
+</script>
+</body>
+</html>
