@@ -50,6 +50,7 @@ console.log('Creating session:', {
         body: JSON.stringify({
           amount,
           currency,
+          enabled_payment_methods: ['card', 'applepay', 'googlepay', 'ideal'],
           processing_channel_id: process.env.CHECKOUT_PROCESSING_CHANNEL_ID,
           reference: `case-demo-${Date.now()}`,
           billing: {
@@ -115,6 +116,6 @@ app.get('/failure', (req, res) => {
 });
 
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port ${PORT}`);
 });
